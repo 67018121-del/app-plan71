@@ -11,9 +11,10 @@ st.set_page_config(page_title="ระบบแผนคอมพิวเตอ�
 def load_data():
     if os.path.exists(EXCEL_FILE):
         try:
-            df_main = pd.read_excel(EXCEL_FILE, sheet_name=0).fillna('')
+            # ใช้ openpyxl อ่าน sheet แรก
+            df_main = pd.read_excel(EXCEL_FILE, sheet_name=0, engine='openpyxl').fillna('')
             try:
-                df_log = pd.read_excel(EXCEL_FILE, sheet_name='ประวัติการแก้ไข').fillna('')
+                df_log = pd.read_excel(EXCEL_FILE, sheet_name='ประวัติการแก้ไข', engine='openpyxl').fillna('')
             except:
                 df_log = pd.DataFrame()
             return df_main, df_log
@@ -66,7 +67,7 @@ if not df_main.empty:
         filtered_df = filtered_df[filtered_df.astype(str).apply(lambda x: x.str.contains(search_txt, case=False)).any(axis=1)]
 
     # ==========================================
-    # 3. ส่วนแก้ไขข้อมูล & บันทึกเฉพาะ Sheet ประวัติการแก้ไข
+    # 3. ส่วนแก้ไขข้อมูล & บันทึกเฉพาะ Sheet ประวัติ
     # ==========================================
     st.subheader("✏️ แก้ไขจำนวนเครื่องขอทดแทน")
     
@@ -94,7 +95,6 @@ if not df_main.empty:
                     val_total_new = val_new + val_replace_new
                     new_amount = val_total_new * unit_price
 
-                    # สร้างประวัติการแก้ไข Log
                     log_entry = {
                         'เวลาที่แก้ไข': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'ชื่อ-นามสกุล ผู้แก้ไข': u_name,
@@ -113,21 +113,15 @@ if not df_main.empty:
                         'ผลต่างงบประมาณ': new_amount - old_amount
                     }
 
-                    # อัปเดตประวัติ Log ในระบบ
                     new_log_df = pd.DataFrame([log_entry])
                     st.session_state.df_log = pd.concat([st.session_state.df_log, new_log_df], ignore_index=True)
 
-                    # บันทึกโดยคง Sheet หลักไว้เดิม และเขียนเฉพาะ Sheet ประวัติการแก้ไข
+                    # เซฟทับโดยคง Sheet 1 ไว้คงเดิม 100%
                     try:
                         with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
-                            # 1. อ่านไฟล์ดั้งเดิมจากดิสก์เพื่อเขียน Sheet 1 กลับลงไปแบบไม่แก้ไขใดๆ
-                            df_original_main = pd.read_excel(EXCEL_FILE, sheet_name=0)
-                            df_original_main.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
-                            
-                            # 2. เขียน Sheet ประวัติการแก้ไขที่เพิ่มแถวใหม่เข้าไป
+                            st.session_state.df_main.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
                             st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
-                            
-                        st.success(f"✅ บันทึกข้อมูลลงเฉพาะ Sheet 'ประวัติการแก้ไข' เรียบร้อยแล้วโดย {u_name}! (Sheet หลักคงเดิมไม่ถูกแก้ไข)")
+                        st.success(f"✅ บันทึกประวัติการแก้ไขสำเร็จเรียบร้อยแล้วโดย {u_name}!")
                     except Exception as e:
                         st.error(f"เกิดข้อผิดพลาดในการเซฟไฟล์: {e}")
 
@@ -141,4 +135,4 @@ if not df_main.empty:
 
     st.dataframe(filtered_df, use_container_width=True)
 else:
-    st.error("ไม่พบข้อมูลในไฟล์ Excel หรือไม่พบไฟล์ 'รายการแผนคอม 71.xlsx'")
+    st.error("ไม่พบข้อมูลในไฟล์ Excel หรือไฟล์เสียหาย โปรดอัปโหลดไฟล์ 'รายการแผนคอม 71.xlsx' ใหม่อีกครั้ง")
