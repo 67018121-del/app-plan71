@@ -29,7 +29,7 @@ st.markdown("""
         justify-content: center;
         align-items: center;
         width: 100%;
-        margin-left: 25px !important; /* ดันไปทางขวา 25px (ปรับเพิ่ม-ลดได้ตามต้องการ) */
+        margin-left: 25px !important;
     }
     div[data-testid="stRadio"] > div {
         justify-content: center !important;
@@ -161,9 +161,6 @@ if not df_main.empty:
         filter_mask = pd.Series([True] * len(df_main))
 
     filtered_indices = df_main[filter_mask].index.tolist()
-
-    total_budget = df_main.loc[filtered_indices, 'จำนวนเงิน'].astype(float).sum()
-    st.markdown(f"<div style='background-color: #E0F2FE; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px;'><h4 style='margin:0; color: #0369A1;'>💰 สรุปรวมงบประมาณ: <b>{total_budget:,.2f}</b> บาท</h4></div>", unsafe_allow_html=True)
 
     # ==========================================
     # 3. แสดงตารางข้อมูล
