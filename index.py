@@ -13,23 +13,54 @@ REPO_NAME = st.secrets.get("REPO_NAME", "67018121-del/app-plan71")
 
 st.set_page_config(page_title="ระบบแผนคอมพิวเตอร์ 71", layout="wide")
 
-# CSS จัดแต่งเพิ่มเติมให้อยู่ตรงกลางและดูสะอาดตา
+# Custom CSS เพื่อปรับแต่งตารางให้อ่านง่าย ดูสะอาดตา
 st.markdown("""
     <style>
     .main .block-container {
-        max-width: 1200px;
+        max-width: 1300px;
         padding-top: 2rem;
         padding-bottom: 3rem;
         margin: 0 auto;
     }
-    div[data-testid="column"] {
+    
+    /* Header ตาราง */
+    .table-header {
+        background-color: #F0F4F8;
+        padding: 12px 8px;
+        font-weight: bold;
+        color: #1E293B;
+        border-radius: 6px;
+        margin-bottom: 8px;
         display: flex;
         align-items: center;
-        justify-content: center;
     }
-    .header-text {
-        font-weight: bold;
+    
+    /* แถวข้อมูล */
+    .table-row {
+        background-color: #FFFFFF;
+        padding: 8px;
+        border-bottom: 1px solid #E2E8F0;
+        display: flex;
+        align-items: center;
+    }
+    
+    .table-row:nth-child(even) {
+        background-color: #F8FAFC;
+    }
+    
+    /* จัดการข้อความกึ่งกลาง */
+    .text-center {
         text-align: center;
+    }
+    .text-right {
+        text-align: right;
+    }
+    
+    /* ปรับแต่งปุ่มกด Streamlit ในตาราง */
+    div[data-testid="column"] button {
+        padding: 2px 8px !important;
+        height: auto !important;
+        min-height: 32px !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -73,7 +104,6 @@ def load_data():
             except:
                 df_log = pd.DataFrame()
             
-            # บันทึกค่า Max ลิมิตตั้งต้น
             if 'ขอทดแทน_MAX' not in df_main.columns:
                 df_main['ขอทดแทน_MAX'] = pd.to_numeric(df_main['ขอทดแทน'], errors='coerce').fillna(0).astype(int)
                 
@@ -91,28 +121,27 @@ if 'df_main' not in st.session_state or 'df_log' not in st.session_state:
 df_main = st.session_state.df_main
 df_log = st.session_state.df_log
 
-# ส่วนหัวระบบอยู่ตรงกลาง
-st.markdown("<h1 style='text-align: center;'>💻 ระบบตรวจสอบ และแก้ไขข้อมูลแผนคอมพิวเตอร์ 71</h1>", unsafe_allow_html=True)
+# หัวเรื่องกลางหน้าจอ
+st.markdown("<h2 style='text-align: center; color: #0F172A;'>💻 ระบบตรวจสอบ และแก้ไขข้อมูลแผนคอมพิวเตอร์ 71</h2>", unsafe_allow_html=True)
 
 if not df_main.empty:
     # ==========================================
     # 1. ข้อมูลผู้ดำเนินการ
     # ==========================================
-    st.subheader("👤 ข้อมูลผู้ทำรายการ")
-    col1, col2, col3, col4 = st.columns(4)
-    u_name = col1.text_input("ชื่อ-นามสกุล:")
-    u_id = col2.text_input("รหัสพนักงาน:")
-    u_pos = col3.text_input("ตำแหน่ง:")
-    u_dept = col4.text_input("หน่วยงานผู้ทำรายการ:")
+    with st.expander("👤 ข้อมูลผู้ทำรายการ (กรุณากรอกก่อนบันทึก)", expanded=True):
+        col1, col2, col3, col4 = st.columns(4)
+        u_name = col1.text_input("ชื่อ-นามสกุล:")
+        u_id = col2.text_input("รหัสพนักงาน:")
+        u_pos = col3.text_input("ตำแหน่ง:")
+        u_dept = col4.text_input("หน่วยงานผู้ทำรายการ:")
 
     # ==========================================
     # 2. ตัวกรองเลือกหน่วยงาน
     # ==========================================
     st.subheader("🔍 เลือกหน่วยงาน")
     depts = ["-- ทั้งหมด --"] + sorted([str(x).strip() for x in df_main['หน่วยงาน'].unique() if str(x).strip()])
-    selected_dept = st.selectbox("เลือกหน่วยงานที่ต้องการตรวจสอบ:", depts)
+    selected_dept = st.selectbox("เลือกรองรับข้อมูลแยกตามหน่วยงาน:", depts)
 
-    # กรองข้อมูล
     if selected_dept != "-- ทั้งหมด --":
         filter_mask = df_main['หน่วยงาน'].astype(str).str.strip() == selected_dept
     else:
@@ -120,33 +149,31 @@ if not df_main.empty:
 
     filtered_indices = df_main[filter_mask].index.tolist()
 
-    # ยอดรวมงบประมาณ
     total_budget = df_main.loc[filtered_indices, 'จำนวนเงิน'].astype(float).sum()
-    st.markdown(f"<h3 style='text-align: center; color: #1E88E5;'>💰 สรุปรวมงบประมาณ: {total_budget:,.2f} บาท</h3>", unsafe_allow_html=True)
+    st.markdown(f"<div style='background-color: #E0F2FE; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px;'><h4 style='margin:0; color: #0369A1;'>💰 สรุปรวมงบประมาณ: <b>{total_budget:,.2f}</b> บาท</h4></div>", unsafe_allow_html=True)
 
-    st.markdown("---")
+    # ==========================================
+    # 3. แสดงตารางข้อมูลแบบคลีน สบายตา
+    # ==========================================
     st.subheader("📋 รายการข้อมูลแผนคอมพิวเตอร์")
 
-    # Header ของตาราง
-    h_c1, h_c2, h_c3, h_c4, h_c5, h_c6, h_c7, h_c8 = st.columns([1, 2, 4, 1, 3, 1, 2, 3])
-    h_c1.markdown("<div class='header-text'>ลำดับ</div>", unsafe_allow_html=True)
-    h_c2.markdown("<div class='header-text'>หน่วยงาน</div>", unsafe_allow_html=True)
-    h_c3.markdown("<div class='header-text'>รายการ/ประเภท</div>", unsafe_allow_html=True)
-    h_c4.markdown("<div class='header-text'>ขอใหม่</div>", unsafe_allow_html=True)
-    h_c5.markdown("<div class='header-text'>ขอทดแทน</div>", unsafe_allow_html=True)
-    h_c6.markdown("<div class='header-text'>รวม</div>", unsafe_allow_html=True)
-    h_c7.markdown("<div class='header-text'>จำนวนเงิน</div>", unsafe_allow_html=True)
-    h_c8.markdown("<div class='header-text'>สถานะข้อมูล</div>", unsafe_allow_html=True)
+    # Header ตาราง
+    h1, h2, h3, h4, h5, h6, h7, h8 = st.columns([0.8, 1.2, 3.5, 0.8, 2.2, 0.8, 1.5, 2.2])
+    h1.markdown("**ลำดับ**")
+    h2.markdown("**หน่วยงาน**")
+    h3.markdown("**รายการ/ประเภท**")
+    h4.markdown("**ขอใหม่**")
+    h5.markdown("<div class='text-center'><b>ขอทดแทน</b></div>", unsafe_allow_html=True)
+    h6.markdown("**รวม**")
+    h7.markdown("<div class='text-right'><b>จำนวนเงิน (บาท)</b></div>", unsafe_allow_html=True)
+    h8.markdown("<div class='text-center'><b>ยืนยัน / แก้ไข</b></div>", unsafe_allow_html=True)
     
-    st.markdown("<hr style='margin: 8px 0;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin-top: 4px; margin-bottom: 12px; border-top: 2px solid #0284C7;'>", unsafe_allow_html=True)
 
-    # ==========================================
-    # 3. แสดงรายการทีละแถวพร้อมปุ่มเพิ่ม/ลด และจุดติ๊ก 2 จุด
-    # ==========================================
     for idx in filtered_indices:
         row = st.session_state.df_main.loc[idx]
         
-        c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1, 2, 4, 1, 3, 1, 2, 3])
+        c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([0.8, 1.2, 3.5, 0.8, 2.2, 0.8, 1.5, 2.2])
         
         c1.write(f"{row.get('ลำดับ', idx + 1)}")
         c2.write(f"{row.get('หน่วยงาน', '')}")
@@ -156,21 +183,21 @@ if not df_main.empty:
         curr_replace = int(row.get('ขอทดแทน', 0))
         max_limit = int(row.get('ขอทดแทน_MAX', curr_replace))
 
-        # จุดติ๊กเลือกสถานะ 2 จุด (ยืนยันข้อมูลเดิม / แก้ไข)
+        # ติ๊กเลือกว่าจะยืนยันข้อมูลเดิม หรือแก้ไข
         action = c8.radio(
             f"action_{idx}",
-            ["ยืนยันข้อมูลเดิม", "แก้ไข"],
+            ["ยืนยัน", "แก้ไข"],
             key=f"radio_{idx}",
             horizontal=True,
             label_visibility="collapsed"
         )
 
-        # หากเลือก "แก้ไข" ให้แสดงปุ่ม - และ +
+        # หากเลือก "แก้ไข" แสดงปุ่ม - และ +
         if action == "แก้ไข":
-            btn_col1, btn_col2, btn_col3 = c5.columns([1, 2, 1])
+            b1, b2, b3 = c5.columns([1, 1.5, 1])
             
             # ปุ่มลบ (-)
-            if btn_col1.button("➖", key=f"dec_{idx}", disabled=(curr_replace <= 0)):
+            if b1.button("➖", key=f"dec_{idx}", disabled=(curr_replace <= 0)):
                 new_replace = curr_replace - 1
                 new_total = int(row.get('ขอใหม่', 0)) + new_replace
                 unit_price = float(row.get('ราคาต่อหน่วย', 0))
@@ -180,10 +207,10 @@ if not df_main.empty:
                 st.session_state.df_main.loc[idx, 'จำนวนเงิน'] = new_total * unit_price
                 st.rerun()
 
-            btn_col2.markdown(f"<div style='text-align: center; font-weight: bold;'>{curr_replace} <br><small style='color: gray;'>(Max: {max_limit})</small></div>", unsafe_allow_html=True)
+            b2.markdown(f"<div style='text-align: center; line-height: 1.2;'><b>{curr_replace}</b><br><small style='color: #64748B;'>Max:{max_limit}</small></div>", unsafe_allow_html=True)
 
             # ปุ่มเพิ่ม (+)
-            if btn_col3.button("➕", key=f"inc_{idx}", disabled=(curr_replace >= max_limit)):
+            if b3.button("➕", key=f"inc_{idx}", disabled=(curr_replace >= max_limit)):
                 new_replace = curr_replace + 1
                 new_total = int(row.get('ขอใหม่', 0)) + new_replace
                 unit_price = float(row.get('ราคาต่อหน่วย', 0))
@@ -193,13 +220,13 @@ if not df_main.empty:
                 st.session_state.df_main.loc[idx, 'จำนวนเงิน'] = new_total * unit_price
                 st.rerun()
         else:
-            # หากเลือก "ยืนยันข้อมูลเดิม" แสดงแค่ตัวเลขเดิมนิ่งๆ
+            # ยืนยันข้อมูลเดิม แสดงตัวเลขปกติ
             c5.markdown(f"<div style='text-align: center;'>{curr_replace}</div>", unsafe_allow_html=True)
         
         c6.write(f"{row.get('รวม', 0)}")
-        c7.write(f"{float(row.get('จำนวนเงิน', 0)):,.2f}")
+        c7.markdown(f"<div class='text-right'>{float(row.get('จำนวนเงิน', 0)):,.2f}</div>", unsafe_allow_html=True)
 
-        st.markdown("<hr style='margin: 4px 0;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='margin: 6px 0; border-top: 1px solid #F1F5F9;'>", unsafe_allow_html=True)
 
     # ==========================================
     # 4. ปุ่มบันทึกข้อมูลและดาวน์โหลด
@@ -215,7 +242,7 @@ if not df_main.empty:
                 new_logs = []
                 for idx in filtered_indices:
                     row = st.session_state.df_main.loc[idx]
-                    action_val = st.session_state.get(f"radio_{idx}", "ยืนยันข้อมูลเดิม")
+                    action_val = st.session_state.get(f"radio_{idx}", "ยืนยัน")
                     
                     orig_replace = int(row.get('ขอทดแทน_MAX', 0))
                     curr_rep = int(row.get('ขอทดแทน', 0))
