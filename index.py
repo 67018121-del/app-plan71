@@ -55,6 +55,8 @@ def load_data():
             # บันทึกค่า Max ลิมิตตั้งต้น
             if 'ขอทดแทน_MAX' not in df_main.columns:
                 df_main['ขอทดแทน_MAX'] = pd.to_numeric(df_main['ขอทดแทน'], errors='coerce').fillna(0).astype(int)
+            if 'สถานะ' not in df_main.columns:
+                df_main['สถานะ'] = 'ยืนยันข้อมูลเดิม'
                 
             return df_main, df_log
         except Exception as e:
@@ -96,85 +98,66 @@ if not df_main.empty:
     else:
         filter_mask = pd.Series([True] * len(df_main))
 
-    filtered_indices = df_main[filter_mask].index.tolist()
+    filtered_df = df_main[filter_mask].copy()
 
     # Calculate Total Budget
-    total_budget = df_main.loc[filtered_indices, 'จำนวนเงิน'].astype(float).sum()
-    st.markdown(f"### 💰 สรุปรวมงบประมาณหน่วยงานที่เลือก: **{total_budget:,.2f}** บาท")
+    total_budget = filtered_df['จำนวนเงิน'].astype(float).sum()
+    st.markdown(f"### 💰 สรุปรวมงบประมาณ: **{total_budget:,.2f}** บาท")
 
     st.markdown("---")
     st.subheader("📋 รายการข้อมูลแผนคอมพิวเตอร์")
 
-    # Header ของรายการ
-    h_c1, h_c2, h_c3, h_c4, h_c5, h_c6, h_c7 = st.columns([1, 4, 2, 2, 2, 3, 3])
-    h_c1.markdown("**ลำดับ**")
-    h_c2.markdown("**รายการ/ประเภท**")
-    h_c3.markdown("**ขอใหม่**")
-    h_c4.markdown("**ขอทดแทน**")
-    h_c5.markdown("**รวม**")
-    h_c6.markdown("**งบประมาณ (บาท)**")
-    h_c7.markdown("**สถานะ / การดำเนินการ**")
-
     # ==========================================
-    # 3. แสดงรายการทีละแถวพร้อมปุ่มดำเนินการข้างตาราง
+    # 3. แสดงตารางข้อมูลแบบ Clean ตารางสวยงาม
     # ==========================================
-    has_changes = False
+    # จัดคอลัมน์ให้ดูง่าย ชัดเจน มีหน่วยงานด้วย
+    cols_order = ['ลำดับ', 'หน่วยงาน', 'รายการ/ประเภท', 'ขอใหม่', 'ขอทดแทน', 'รวม', 'ราคาต่อหน่วย', 'จำนวนเงิน', 'สถานะ']
+    
+    # กำหนดลักษณะคอลัมน์
+    column_config = {
+        "ลำดับ": st.column_config.NumberColumn("ลำดับ", width="small", disabled=True),
+        "หน่วยงาน": st.column_config.TextColumn("หน่วยงาน", width="medium", disabled=True),
+        "รายการ/ประเภท": st.column_config.TextColumn("รายการ/ประเภท", width="large", disabled=True),
+        "ขอใหม่": st.column_config.NumberColumn("ขอใหม่", width="small", disabled=True),
+        "ขอทดแทน": st.column_config.NumberColumn("ขอทดแทน (กดแก้ได้)", width="medium", help="แก้ไขจำนวนได้ที่นี่ (ปรับลดได้ถึง 0)"),
+        "รวม": st.column_config.NumberColumn("รวม", width="small", disabled=True),
+        "ราคาต่อหน่วย": st.column_config.NumberColumn("ราคาต่อหน่วย", format="฿%d", width="small", disabled=True),
+        "จำนวนเงิน": st.column_config.NumberColumn("จำนวนเงิน", format="฿%.2f", width="medium", disabled=True),
+        "สถานะ": st.column_config.SelectboxColumn("สถานะการดำเนินการ", options=["ยืนยันข้อมูลเดิม", "แก้ไข"], width="medium", required=True)
+    }
 
-    for idx in filtered_indices:
-        row = st.session_state.df_main.loc[idx]
-        
-        c1, c2, c3, c4, c5, c6, c7 = st.columns([1, 4, 2, 2, 2, 3, 3])
-        
-        c1.write(f"{row.get('ลำดับ', idx + 1)}")
-        c2.write(f"{row.get('รายการ/ประเภท', '')}")
-        c3.write(f"{row.get('ขอใหม่', 0)}")
-        
-        # แสดงขอทดแทนปัจจุบัน
-        curr_replace = int(row.get('ขอทดแทน', 0))
-        max_limit = int(row.get('ขอทดแทน_MAX', curr_replace))
-        c4.write(f"**{curr_replace}** (Max: {max_limit})")
-        
-        c5.write(f"{row.get('รวม', 0)}")
-        c6.write(f"{float(row.get('จำนวนเงิน', 0)):,.2f}")
+    # แสดง Data Editor ตารางแบบโต้ตอบได้
+    edited_df = st.data_editor(
+        filtered_df[cols_order],
+        column_config=column_config,
+        hide_index=True,
+        use_container_width=True,
+        key="data_editor"
+    )
 
-        # ฝั่งขวา: สวิตช์เลือกว่า ยืนยัน หรือ แก้ไข
-        action = c7.radio(
-            f"action_{idx}",
-            ["ยืนยันข้อมูลเดิม", "แก้ไข"],
-            key=f"radio_{idx}",
-            horizontal=True,
-            label_visibility="collapsed"
-        )
-
-        # หากเลือก "แก้ไข" ให้แสดงปุ่ม + / - ข้างตาราง
-        if action == "แก้ไข":
-            btn_col1, btn_col2, btn_col3 = c7.columns([1, 2, 1])
+    # คำนวณยอดและตรวจสอบ MAX Limit อัตโนมัติเมื่อมีการพิมพ์แก้จำนวนในตาราง
+    for idx, edited_row in edited_df.iterrows():
+        orig_idx = filtered_df.index[idx]
+        max_limit = int(st.session_state.df_main.loc[orig_idx, 'ขอทดแทน_MAX'])
+        new_replace = int(edited_row['ขอทดแทน'])
+        
+        # คุม Limit ไม่ให้เกิน Max
+        if new_replace > max_limit:
+            st.warning(f"⚠️ รายการลำดับที่ {edited_row['ลำดับ']} ({edited_row['รายการ/ประเภท']}) เพิ่มได้ไม่เกิน {max_limit} เครื่อง ระบบปรับเหลือ {max_limit} ให้อัตโนมัติ")
+            new_replace = max_limit
             
-            # ปุ่มลบ (-)
-            if btn_col1.button("➖", key=f"dec_{idx}", disabled=(curr_replace <= 0)):
-                new_replace = curr_replace - 1
-                new_total = int(row.get('ขอใหม่', 0)) + new_replace
-                unit_price = float(row.get('ราคาต่อหน่วย', 0))
-                
-                st.session_state.df_main.loc[idx, 'ขอทดแทน'] = new_replace
-                st.session_state.df_main.loc[idx, 'รวม'] = new_total
-                st.session_state.df_main.loc[idx, 'จำนวนเงิน'] = new_total * unit_price
-                st.rerun()
-
-            btn_col2.markdown(f"<h5 style='text-align: center; margin: 0;'>{curr_replace}</h5>", unsafe_allow_html=True)
-
-            # ปุ่มเพิ่ม (+)
-            if btn_col3.button("➕", key=f"inc_{idx}", disabled=(curr_replace >= max_limit)):
-                new_replace = curr_replace + 1
-                new_total = int(row.get('ขอใหม่', 0)) + new_replace
-                unit_price = float(row.get('ราคาต่อหน่วย', 0))
-                
-                st.session_state.df_main.loc[idx, 'ขอทดแทน'] = new_replace
-                st.session_state.df_main.loc[idx, 'รวม'] = new_total
-                st.session_state.df_main.loc[idx, 'จำนวนเงิน'] = new_total * unit_price
-                st.rerun()
-
-        st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
+        if new_replace < 0:
+            new_replace = 0
+            
+        unit_price = float(st.session_state.df_main.loc[orig_idx, 'ราคาต่อหน่วย'])
+        val_new = int(st.session_state.df_main.loc[orig_idx, 'ขอใหม่'])
+        
+        # อัปเดตยอดคำนวณใหม่ใน Session State
+        new_total = val_new + new_replace
+        st.session_state.df_main.loc[orig_idx, 'ขอทดแทน'] = new_replace
+        st.session_state.df_main.loc[orig_idx, 'รวม'] = new_total
+        st.session_state.df_main.loc[orig_idx, 'จำนวนเงิน'] = new_total * unit_price
+        st.session_state.df_main.loc[orig_idx, 'สถานะ'] = edited_row['สถานะ']
 
     # ==========================================
     # 4. ปุ่มบันทึกข้อมูลและดาวน์โหลด
@@ -187,12 +170,9 @@ if not df_main.empty:
             if not u_name or not u_id or not u_pos or not u_dept:
                 st.warning("⚠️ กรุณากรอกข้อมูลผู้ทำรายการให้ครบถ้วนด้านบนก่อนกดบันทึก")
             else:
-                # สร้าง Log สรุปการรายการ
                 new_logs = []
-                for idx in filtered_indices:
+                for idx in filtered_df.index:
                     row = st.session_state.df_main.loc[idx]
-                    action_val = st.session_state.get(f"radio_{idx}", "ยืนยันข้อมูลเดิม")
-                    
                     orig_replace = int(row.get('ขอทดแทน_MAX', 0))
                     curr_rep = int(row.get('ขอทดแทน', 0))
                     unit_p = float(row.get('ราคาต่อหน่วย', 0))
@@ -211,17 +191,16 @@ if not df_main.empty:
                         'รหัสพนักงาน': u_id,
                         'ตำแหน่ง': u_pos,
                         'หน่วยงานผู้แก้ไข': u_dept,
-                        'หมายเหตุ': action_val
+                        'หมายเหตุ': row.get('สถานะ', 'ยืนยันข้อมูลเดิม')
                     }
                     new_logs.append(log_entry)
 
                 new_log_df = pd.DataFrame(new_logs)
                 st.session_state.df_log = pd.concat([st.session_state.df_log, new_log_df], ignore_index=True)
 
-                # แปลงไฟล์เซฟลง GitHub
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_save = st.session_state.df_main.drop(columns=['ขอทดแทน_MAX'], errors='ignore')
+                    df_save = st.session_state.df_main.drop(columns=['ขอทดแทน_MAX', 'สถานะ'], errors='ignore')
                     df_save.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
                     st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
                 excel_bytes = output.getvalue()
@@ -234,7 +213,7 @@ if not df_main.empty:
     with col_dl:
         output_download = io.BytesIO()
         with pd.ExcelWriter(output_download, engine='openpyxl') as writer:
-            df_save = st.session_state.df_main.drop(columns=['ขอทดแทน_MAX'], errors='ignore')
+            df_save = st.session_state.df_main.drop(columns=['ขอทดแทน_MAX', 'สถานะ'], errors='ignore')
             df_save.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
             st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
         
