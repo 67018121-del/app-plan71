@@ -11,7 +11,6 @@ st.set_page_config(page_title="ระบบแผนคอมพิวเตอ�
 def load_data():
     if os.path.exists(EXCEL_FILE):
         try:
-            # ใช้ openpyxl อ่าน sheet แรก
             df_main = pd.read_excel(EXCEL_FILE, sheet_name=0, engine='openpyxl').fillna('')
             try:
                 df_log = pd.read_excel(EXCEL_FILE, sheet_name='ประวัติการแก้ไข', engine='openpyxl').fillna('')
@@ -67,7 +66,7 @@ if not df_main.empty:
         filtered_df = filtered_df[filtered_df.astype(str).apply(lambda x: x.str.contains(search_txt, case=False)).any(axis=1)]
 
     # ==========================================
-    # 3. ส่วนแก้ไขข้อมูล & บันทึกเฉพาะ Sheet ประวัติ
+    # 3. ส่วนแก้ไขข้อมูล & บันทึก (แก้ไข Sheet หลัก + สะสมใน Sheet ประวัติ)
     # ==========================================
     st.subheader("✏️ แก้ไขจำนวนเครื่องขอทดแทน")
     
@@ -80,7 +79,7 @@ if not df_main.empty:
         
         val_replace_new = st.number_input("ขอทดแทน:", value=int(current_row.get('ขอทดแทน', 0)), step=1, min_value=0, max_value=999)
 
-        if st.button("💾 บันทึกลง Sheet ประวัติการแก้ไข", type="primary"):
+        if st.button("💾 บันทึกการแก้ไขลงไฟล์ Excel", type="primary"):
             if not u_name or not u_id or not u_pos or not u_dept:
                 st.warning("⚠️ กรุณากรอกข้อมูลผู้แก้ไขให้ครบถ้วน (ชื่อ-นามสกุล, รหัสพนักงาน, ตำแหน่ง, หน่วยงานผู้แก้ไข)")
             else:
@@ -95,6 +94,12 @@ if not df_main.empty:
                     val_total_new = val_new + val_replace_new
                     new_amount = val_total_new * unit_price
 
+                    # 1. อัปเดตข้อมูล Sheet หลักใน Session
+                    st.session_state.df_main.loc[selected_idx, 'ขอทดแทน'] = val_replace_new
+                    st.session_state.df_main.loc[selected_idx, 'รวม'] = val_total_new
+                    st.session_state.df_main.loc[selected_idx, 'จำนวนเงิน'] = new_amount
+
+                    # 2. สร้าง Log บันทึกย้อนหลัง
                     log_entry = {
                         'เวลาที่แก้ไข': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'ชื่อ-นามสกุล ผู้แก้ไข': u_name,
@@ -113,15 +118,16 @@ if not df_main.empty:
                         'ผลต่างงบประมาณ': new_amount - old_amount
                     }
 
+                    # อัปเดตประวัติ Log ใน Session
                     new_log_df = pd.DataFrame([log_entry])
                     st.session_state.df_log = pd.concat([st.session_state.df_log, new_log_df], ignore_index=True)
 
-                    # เซฟทับโดยคง Sheet 1 ไว้คงเดิม 100%
+                    # 3. บันทึกเขียนทับลงไฟล์ Excel (ทั้ง Sheet หลักที่แก้ไขแล้ว และ Sheet ประวัติการแก้ไข)
                     try:
                         with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
                             st.session_state.df_main.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
                             st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
-                        st.success(f"✅ บันทึกประวัติการแก้ไขสำเร็จเรียบร้อยแล้วโดย {u_name}!")
+                        st.success(f"✅ บันทึกการแก้ไขลง Sheet หลัก และเพิ่มข้อมูลลง Sheet 'ประวัติการแก้ไข' เรียบร้อยแล้วโดย {u_name}!")
                     except Exception as e:
                         st.error(f"เกิดข้อผิดพลาดในการเซฟไฟล์: {e}")
 
