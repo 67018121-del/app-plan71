@@ -13,41 +13,67 @@ REPO_NAME = st.secrets.get("REPO_NAME", "67018121-del/app-plan71")
 
 st.set_page_config(page_title="ระบบแผนคอมพิวเตอร์ 71", layout="wide")
 
-# CSS จัดการดึง radio และเนื้อหาทุกอย่างให้อยู่กึ่งกลางเป๊ะ
+# CSS สำหรับจัดโครงสร้างตารางและจัดกึ่งกลางทุก Element เป๊ะๆ ทั้งแนวนอนและแนวตั้ง
 st.markdown("""
     <style>
     .main .block-container {
-        max-width: 1300px;
+        max-width: 1350px;
         padding-top: 2rem;
         padding-bottom: 3rem;
         margin: 0 auto;
     }
-    
-    /* บังคับ st.radio ให้อยู่ตรงกลางคอลัมน์ */
+
+    /* CSS บังคับ st.radio ให้อยู่ตรงกลางคอลัมน์แนวนอน */
+    div[data-testid="stRadio"] {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+    }
     div[data-testid="stRadio"] > div {
         justify-content: center !important;
+        gap: 15px !important;
     }
 
-    /* บังคับ Layout คอลัมน์ Streamlit จัดตรงกลางแนวตั้ง */
-    div[data-testid="stHorizontalBlock"] > div {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
+    /* บังคับทุก คอลัมน์ Streamlit จัดตรงกลางแนวตั้ง */
+    div[data-testid="stHorizontalBlock"] {
+        align-items: center !important;
+        padding: 6px 0;
+        border-bottom: 1px solid #E2E8F0;
     }
 
-    /* ปรับแต่งปุ่มกด Streamlit เล็กกระชับ ไม่ดันบรรทัด */
+    /* ปรับปุ่มบวกลบให้เล็กกระชับ */
     div[data-testid="column"] button {
-        padding: 0px 8px !important;
-        height: 32px !important;
-        min-height: 32px !important;
+        padding: 0px 6px !important;
+        height: 30px !important;
+        min-height: 30px !important;
         line-height: 1 !important;
+    }
+
+    /* สไตล์หัวตาราง */
+    .table-header {
+        background-color: #F1F5F9;
+        padding: 10px 0;
+        border-radius: 6px;
+        border-bottom: 2px solid #0284C7;
+        margin-bottom: 8px;
+    }
+
+    .cell-center {
+        text-align: center;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .cell-right {
+        text-align: right;
     }
 
     .num-display {
         font-weight: bold;
-        font-size: 15px;
+        font-size: 14px;
         text-align: center;
-        min-width: 30px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -139,37 +165,38 @@ if not df_main.empty:
     st.markdown(f"<div style='background-color: #E0F2FE; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px;'><h4 style='margin:0; color: #0369A1;'>💰 สรุปรวมงบประมาณ: <b>{total_budget:,.2f}</b> บาท</h4></div>", unsafe_allow_html=True)
 
     # ==========================================
-    # 3. แสดงตารางข้อมูลจัดระเบียบแนวตั้งและแนวนอน
+    # 3. แสดงตารางข้อมูลแบบปรับ Alignment กลางเป๊ะ
     # ==========================================
     st.subheader("📋 รายการข้อมูลแผนคอมพิวเตอร์")
 
     # Header ตาราง
-    h1, h2, h3, h4, h5, h6, h7, h8 = st.columns([0.8, 1.2, 3.5, 0.8, 2.0, 0.8, 1.5, 2.0])
-    h1.markdown("**ลำดับ**")
-    h2.markdown("**หน่วยงาน**")
-    h3.markdown("**รายการ/ประเภท**")
-    h4.markdown("<div style='text-align: center;'><b>ขอใหม่</b></div>", unsafe_allow_html=True)
-    h5.markdown("<div style='text-align: center;'><b>ขอทดแทน</b></div>", unsafe_allow_html=True)
-    h6.markdown("<div style='text-align: center;'><b>รวม</b></div>", unsafe_allow_html=True)
-    h7.markdown("<div style='text-align: right;'><b>จำนวนเงิน (บาท)</b></div>", unsafe_allow_html=True)
-    h8.markdown("<div style='text-align: center;'><b>ยืนยัน / แก้ไข</b></div>", unsafe_allow_html=True)
-    
-    st.markdown("<hr style='margin-top: 4px; margin-bottom: 12px; border-top: 2px solid #0284C7;'>", unsafe_allow_html=True)
+    st.markdown("<div class='table-header'>", unsafe_allow_html=True)
+    h1, h2, h3, h4, h5, h6, h7, h8 = st.columns([0.6, 1.0, 3.5, 0.8, 1.8, 0.8, 1.5, 2.0])
+    h1.markdown("<div class='cell-center'><b>ลำดับ</b></div>", unsafe_allow_html=True)
+    h2.markdown("<b>หน่วยงาน</b>", unsafe_allow_html=True)
+    h3.markdown("<b>รายการ/ประเภท</b>", unsafe_allow_html=True)
+    h4.markdown("<div class='cell-center'><b>ขอใหม่</b></div>", unsafe_allow_html=True)
+    h5.markdown("<div class='cell-center'><b>ขอทดแทน</b></div>", unsafe_allow_html=True)
+    h6.markdown("<div class='cell-center'><b>รวม</b></div>", unsafe_allow_html=True)
+    h7.markdown("<div class='cell-right'><b>จำนวนเงิน (บาท)</b></div>", unsafe_allow_html=True)
+    h8.markdown("<div class='cell-center'><b>ยืนยัน / แก้ไข</b></div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
+    # แถวข้อมูลในตาราง
     for idx in filtered_indices:
         row = st.session_state.df_main.loc[idx]
         
-        c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([0.8, 1.2, 3.5, 0.8, 2.0, 0.8, 1.5, 2.0])
+        c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([0.6, 1.0, 3.5, 0.8, 1.8, 0.8, 1.5, 2.0])
         
-        c1.write(f"{row.get('ลำดับ', idx + 1)}")
+        c1.markdown(f"<div class='cell-center'>{row.get('ลำดับ', idx + 1)}</div>", unsafe_allow_html=True)
         c2.write(f"{row.get('หน่วยงาน', '')}")
         c3.write(f"{row.get('รายการ/ประเภท', '')}")
-        c4.markdown(f"<div style='text-align: center;'>{row.get('ขอใหม่', 0)}</div>", unsafe_allow_html=True)
+        c4.markdown(f"<div class='cell-center'>{row.get('ขอใหม่', 0)}</div>", unsafe_allow_html=True)
         
         curr_replace = int(row.get('ขอทดแทน', 0))
         max_limit = int(row.get('ขอทดแทน_MAX', curr_replace))
 
-        # Radio เลือกสถานะ (จะถูกบังคับจัดกึ่งกลางโดย CSS)
+        # Radio เลือกสถานะ (จัดอยู่ตรงกลางแนวนอนและแนวตั้งโดย CSS)
         action = c8.radio(
             f"action_{idx}",
             ["ยืนยัน", "แก้ไข"],
@@ -180,7 +207,7 @@ if not df_main.empty:
 
         # หากเลือก "แก้ไข" แสดงปุ่ม - และ +
         if action == "แก้ไข":
-            b1, b2, b3 = c5.columns([1, 1.2, 1])
+            b1, b2, b3 = c5.columns([1, 1, 1])
             
             # ปุ่มลบ (-)
             if b1.button("➖", key=f"dec_{idx}", disabled=(curr_replace <= 0)):
@@ -206,13 +233,11 @@ if not df_main.empty:
                 st.session_state.df_main.loc[idx, 'จำนวนเงิน'] = new_total * unit_price
                 st.rerun()
         else:
-            # ยืนยันข้อมูลเดิม แสดงตัวเลขปกติ
-            c5.markdown(f"<div style='text-align: center;'>{curr_replace}</div>", unsafe_allow_html=True)
+            # ยืนยันข้อมูลเดิม แสดงตัวเลขตรงกลาง
+            c5.markdown(f"<div class='cell-center'>{curr_replace}</div>", unsafe_allow_html=True)
         
-        c6.markdown(f"<div style='text-align: center;'>{row.get('รวม', 0)}</div>", unsafe_allow_html=True)
-        c7.markdown(f"<div style='text-align: right;'>{float(row.get('จำนวนเงิน', 0)):,.2f}</div>", unsafe_allow_html=True)
-
-        st.markdown("<hr style='margin: 6px 0; border-top: 1px solid #E2E8F0;'>", unsafe_allow_html=True)
+        c6.markdown(f"<div class='cell-center'>{row.get('รวม', 0)}</div>", unsafe_allow_html=True)
+        c7.markdown(f"<div class='cell-right'>{float(row.get('จำนวนเงิน', 0)):,.2f}</div>", unsafe_allow_html=True)
 
     # ==========================================
     # 4. ปุ่มบันทึกข้อมูลและดาวน์โหลด
