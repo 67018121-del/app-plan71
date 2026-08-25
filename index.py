@@ -66,7 +66,7 @@ if not df_main.empty:
         filtered_df = filtered_df[filtered_df.astype(str).apply(lambda x: x.str.contains(search_txt, case=False)).any(axis=1)]
 
     # ==========================================
-    # 3. ส่วนแก้ไขข้อมูล & บันทึกลง Excel อัตโนมัติ
+    # 3. ส่วนแก้ไขข้อมูล & บันทึกเฉพาะ Sheet ประวัติการแก้ไข
     # ==========================================
     st.subheader("✏️ แก้ไขจำนวนเครื่องขอทดแทน")
     
@@ -79,7 +79,7 @@ if not df_main.empty:
         
         val_replace_new = st.number_input("ขอทดแทน:", value=int(current_row.get('ขอทดแทน', 0)), step=1, min_value=0, max_value=999)
 
-        if st.button("💾 บันทึกการแก้ไขลงไฟล์ Excel", type="primary"):
+        if st.button("💾 บันทึกลง Sheet ประวัติการแก้ไข", type="primary"):
             if not u_name or not u_id or not u_pos or not u_dept:
                 st.warning("⚠️ กรุณากรอกข้อมูลผู้แก้ไขให้ครบถ้วน (ชื่อ-นามสกุล, รหัสพนักงาน, ตำแหน่ง, หน่วยงานผู้แก้ไข)")
             else:
@@ -113,21 +113,21 @@ if not df_main.empty:
                         'ผลต่างงบประมาณ': new_amount - old_amount
                     }
 
-                    # 1. อัปเดตข้อมูลใน Session State
-                    st.session_state.df_main.loc[selected_idx, 'ขอทดแทน'] = val_replace_new
-                    st.session_state.df_main.loc[selected_idx, 'รวม'] = val_total_new
-                    st.session_state.df_main.loc[selected_idx, 'จำนวนเงิน'] = new_amount
-
+                    # อัปเดตประวัติ Log ในระบบ
                     new_log_df = pd.DataFrame([log_entry])
                     st.session_state.df_log = pd.concat([st.session_state.df_log, new_log_df], ignore_index=True)
 
-                    # 2. บันทึกข้อมูลเขียนทับลงไฟล์ Excel ทันที
+                    # บันทึกโดยคง Sheet หลักไว้เดิม และเขียนเฉพาะ Sheet ประวัติการแก้ไข
                     try:
                         with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
-                            st.session_state.df_main.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
-                            if not st.session_state.df_log.empty:
-                                st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
-                        st.success(f"✅ บันทึกข้อมูลและประวัติการแก้ไขลงไฟล์ Excel เรียบร้อยแล้วโดย {u_name}!")
+                            # 1. อ่านไฟล์ดั้งเดิมจากดิสก์เพื่อเขียน Sheet 1 กลับลงไปแบบไม่แก้ไขใดๆ
+                            df_original_main = pd.read_excel(EXCEL_FILE, sheet_name=0)
+                            df_original_main.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
+                            
+                            # 2. เขียน Sheet ประวัติการแก้ไขที่เพิ่มแถวใหม่เข้าไป
+                            st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
+                            
+                        st.success(f"✅ บันทึกข้อมูลลงเฉพาะ Sheet 'ประวัติการแก้ไข' เรียบร้อยแล้วโดย {u_name}! (Sheet หลักคงเดิมไม่ถูกแก้ไข)")
                     except Exception as e:
                         st.error(f"เกิดข้อผิดพลาดในการเซฟไฟล์: {e}")
 
