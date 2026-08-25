@@ -13,7 +13,7 @@ REPO_NAME = st.secrets.get("REPO_NAME", "67018121-del/app-plan71")
 
 st.set_page_config(page_title="ระบบแผนคอมพิวเตอร์ 71", layout="wide")
 
-# CSS จัดการแนวตั้ง (Vertical Alignment) ให้ตรงกันทุกคอลัมน์
+# CSS จัดการดึง radio และเนื้อหาทุกอย่างให้อยู่กึ่งกลางเป๊ะ
 st.markdown("""
     <style>
     .main .block-container {
@@ -23,7 +23,12 @@ st.markdown("""
         margin: 0 auto;
     }
     
-    /* บังคับให้ คอลัมน์ Streamlit จัดเนื้อหาอยู่ตรงกลางแนวตั้ง */
+    /* บังคับ st.radio ให้อยู่ตรงกลางคอลัมน์ */
+    div[data-testid="stRadio"] > div {
+        justify-content: center !important;
+    }
+
+    /* บังคับ Layout คอลัมน์ Streamlit จัดตรงกลางแนวตั้ง */
     div[data-testid="stHorizontalBlock"] > div {
         display: flex;
         flex-direction: column;
@@ -38,13 +43,6 @@ st.markdown("""
         line-height: 1 !important;
     }
 
-    /* สไตล์ช่องตัวเลขและปุ่มบวกลบ */
-    .inc-dec-box {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-    }
     .num-display {
         font-weight: bold;
         font-size: 15px;
@@ -141,7 +139,7 @@ if not df_main.empty:
     st.markdown(f"<div style='background-color: #E0F2FE; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px;'><h4 style='margin:0; color: #0369A1;'>💰 สรุปรวมงบประมาณ: <b>{total_budget:,.2f}</b> บาท</h4></div>", unsafe_allow_html=True)
 
     # ==========================================
-    # 3. แสดงตารางข้อมูลจัดระเบียบแนวตั้งตรงกันเป๊ะ
+    # 3. แสดงตารางข้อมูลจัดระเบียบแนวตั้งและแนวนอน
     # ==========================================
     st.subheader("📋 รายการข้อมูลแผนคอมพิวเตอร์")
 
@@ -171,7 +169,7 @@ if not df_main.empty:
         curr_replace = int(row.get('ขอทดแทน', 0))
         max_limit = int(row.get('ขอทดแทน_MAX', curr_replace))
 
-        # ติ๊กเลือกว่าจะยืนยันข้อมูลเดิม หรือแก้ไข
+        # Radio เลือกสถานะ (จะถูกบังคับจัดกึ่งกลางโดย CSS)
         action = c8.radio(
             f"action_{idx}",
             ["ยืนยัน", "แก้ไข"],
