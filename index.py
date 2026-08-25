@@ -2,14 +2,12 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
-import io
 
 EXCEL_FILE = 'รายการแผนคอม 71.xlsx'
 
 st.set_page_config(page_title="ระบบแผนคอมพิวเตอร์ 71", layout="wide")
 
-# --- โหลดข้อมูล ---
-@st.cache_data(ttl=1)
+# --- ฟังก์ชันอ่านข้อมูลจากไฟล์ Excel ---
 def load_data():
     if os.path.exists(EXCEL_FILE):
         try:
@@ -23,8 +21,8 @@ def load_data():
             st.error(f"Error loading excel file: {e}")
     return pd.DataFrame(), pd.DataFrame()
 
-# ใช้ Session State เก็บข้อมูลระหว่างการกดปุ่ม
-if 'df_main' not in st.session_state:
+# โหลดข้อมูลเข้าสู่ Session State
+if 'df_main' not in st.session_state or 'df_log' not in st.session_state:
     df_m, df_l = load_data()
     st.session_state.df_main = df_m
     st.session_state.df_log = df_l
@@ -36,7 +34,7 @@ st.title("💻 ระบบค้นหา แก้ไข และจำแน
 
 if not df_main.empty:
     # ==========================================
-    # 1. ส่วนบน: ข้อมูลผู้แก้ไข
+    # 1. ข้อมูลผู้ทำการแก้ไข
     # ==========================================
     st.subheader("👤 ข้อมูลผู้ทำการแก้ไข")
     col1, col2, col3, col4 = st.columns(4)
@@ -68,12 +66,11 @@ if not df_main.empty:
         filtered_df = filtered_df[filtered_df.astype(str).apply(lambda x: x.str.contains(search_txt, case=False)).any(axis=1)]
 
     # ==========================================
-    # 3. ส่วนแก้ไขข้อมูล
+    # 3. ส่วนแก้ไขข้อมูล & บันทึกลง Excel อัตโนมัติ
     # ==========================================
     st.subheader("✏️ แก้ไขจำนวนเครื่องขอทดแทน")
     
     if not filtered_df.empty:
-        # ดรอปดาวน์เลือกรายการที่แสดงผลอยู่
         options = {f"ลำดับ {row.get('ลำดับ', idx + 1)}: [{row.get('หน่วยงาน', '')}] {row.get('รายการ/ประเภท', '')}": idx for idx, row in filtered_df.iterrows()}
         selected_option = st.selectbox("เลือกรายการที่จะแก้ไข:", list(options.keys()))
         
@@ -82,9 +79,7 @@ if not df_main.empty:
         
         val_replace_new = st.number_input("ขอทดแทน:", value=int(current_row.get('ขอทดแทน', 0)), step=1, min_value=0, max_value=999)
 
-        col_btn1, col_btn2 = st.columns([1, 2])
-        
-        if col_btn1.button("บันทึกการแก้ไข", type="primary"):
+        if st.button("💾 บันทึกการแก้ไขลงไฟล์ Excel", type="primary"):
             if not u_name or not u_id or not u_pos or not u_dept:
                 st.warning("⚠️ กรุณากรอกข้อมูลผู้แก้ไขให้ครบถ้วน (ชื่อ-นามสกุล, รหัสพนักงาน, ตำแหน่ง, หน่วยงานผู้แก้ไข)")
             else:
@@ -99,7 +94,7 @@ if not df_main.empty:
                     val_total_new = val_new + val_replace_new
                     new_amount = val_total_new * unit_price
 
-                    # บันทึกประวัติ Log
+                    # สร้างประวัติการแก้ไข Log
                     log_entry = {
                         'เวลาที่แก้ไข': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'ชื่อ-นามสกุล ผู้แก้ไข': u_name,
@@ -118,7 +113,7 @@ if not df_main.empty:
                         'ผลต่างงบประมาณ': new_amount - old_amount
                     }
 
-                    # อัปเดตใน Session State
+                    # 1. อัปเดตข้อมูลใน Session State
                     st.session_state.df_main.loc[selected_idx, 'ขอทดแทน'] = val_replace_new
                     st.session_state.df_main.loc[selected_idx, 'รวม'] = val_total_new
                     st.session_state.df_main.loc[selected_idx, 'จำนวนเงิน'] = new_amount
@@ -126,22 +121,17 @@ if not df_main.empty:
                     new_log_df = pd.DataFrame([log_entry])
                     st.session_state.df_log = pd.concat([st.session_state.df_log, new_log_df], ignore_index=True)
 
-                    st.success(f"✅ อัปเดตข้อมูลเรียบร้อยโดย {u_name}! อย่าลืมกดปุ่มดาวน์โหลดไฟล์ Excel")
+                    # 2. บันทึกข้อมูลเขียนทับลงไฟล์ Excel ทันที
+                    try:
+                        with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
+                            st.session_state.df_main.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
+                            if not st.session_state.df_log.empty:
+                                st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
+                        st.success(f"✅ บันทึกข้อมูลและประวัติการแก้ไขลงไฟล์ Excel เรียบร้อยแล้วโดย {u_name}!")
+                    except Exception as e:
+                        st.error(f"เกิดข้อผิดพลาดในการเซฟไฟล์: {e}")
+
                     st.rerun()
-
-        # สร้างไฟล์ Excel สำหรับดาวน์โหลดกลับไปใช้งาน
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            st.session_state.df_main.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
-            if not st.session_state.df_log.empty:
-                st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
-
-        col_btn2.download_button(
-            label="💾 บันทึก/ดาวน์โหลดลง Excel (รวม Sheet ประวัติ)",
-            data=buffer.getvalue(),
-            file_name="รายการแผนคอม 71.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
 
     # ==========================================
     # 4. สรุปยอดเงิน & ตารางแสดงผล
