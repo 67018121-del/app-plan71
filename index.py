@@ -8,22 +8,22 @@ import base64
 
 EXCEL_FILE = 'รายการแผนคอม 71.xlsx'
 
-# ดึงค่าจาก Streamlit Secrets หรือ Environment Variable
 GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", os.environ.get("GITHUB_TOKEN", ""))
-REPO_NAME = st.secrets.get("REPO_NAME", "67018121-del/app-plan71")  # เปลี่ยนตาม Username/Repo จริงของคุณ
+REPO_NAME = st.secrets.get("REPO_NAME", "67018121-del/app-plan71")
 
 st.set_page_config(page_title="ระบบแผนคอมพิวเตอร์ 71", layout="wide")
 
 # --- ฟังก์ชันบันทึกกลับไปยัง GitHub อัตโนมัติ ---
 def save_to_github(file_bytes, commit_message):
     if not GITHUB_TOKEN:
-        st.warning("⚠️ ยังไม่ได้ตั้งค่า GITHUB_TOKEN ใน Streamlit Secrets (ข้อมูลจะบันทึกชั่วคราวในเครื่อง Server)")
-        with open(EXCEL_FILE, "wb") as f:
-            f.write(file_bytes)
-        return True
+        st.warning("⚠️ ยังไม่ได้ตั้งค่า GITHUB_TOKEN ใน Streamlit Secrets")
+        return False
 
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{EXCEL_FILE}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json"
+    }
     
     # 1. ดึง sha ของไฟล์เดิม
     res = requests.get(url, headers=headers)
@@ -33,9 +33,10 @@ def save_to_github(file_bytes, commit_message):
     content_b64 = base64.b64encode(file_bytes).decode("utf-8")
     payload = {
         "message": commit_message,
-        "content": content_b64,
-        "sha": sha
+        "content": content_b64
     }
+    if sha:
+        payload["sha"] = sha
     
     put_res = requests.put(url, json=payload, headers=headers)
     return put_res.status_code in [200, 201]
@@ -96,7 +97,7 @@ if not df_main.empty:
     if selected_type != "-- ทั้งหมด --":
         filtered_df = filtered_df[filtered_df['รายการ/ประเภท'].astype(str).str.strip() == selected_type]
     if search_txt:
-        filtered_df = filtered_df[filtered_df.astype(str).apply(lambda x: x.str.contains(search_txt, case=False)).any(axis=1)]
+        filtered_df = filtered_df.astype(str).apply(lambda x: x.str.contains(search_txt, case=False)).any(axis=1)
 
     # ==========================================
     # 3. ส่วนแก้ไขข้อมูล & บันทึก
@@ -132,7 +133,7 @@ if not df_main.empty:
                     st.session_state.df_main.loc[selected_idx, 'รวม'] = val_total_new
                     st.session_state.df_main.loc[selected_idx, 'จำนวนเงิน'] = new_amount
 
-                    # 2. สร้าง Log บันทึกย้อนหลัง (เรียงคอลัมน์ให้ตรงตารางเดิม)
+                    # 2. สร้าง Log บันทึกย้อนหลัง
                     log_entry = {
                         'เวลาที่แก้ไข': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'ลำดับ': current_row.get('ลำดับ', selected_idx + 1),
@@ -165,9 +166,9 @@ if not df_main.empty:
                     success = save_to_github(excel_bytes, f"Updated by {u_name} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                     
                     if success:
-                        st.success(f"✅ บันทึกการแก้ไขและส่งข้อมูลเข้า GitHub เรียบร้อยแล้วโดย {u_name}!")
+                        st.success(f"✅ บันทึกการแก้ไขสำเร็จ! ข้อมูลถูกอัปเดตลงไฟล์ Excel ใน GitHub เรียบร้อยแล้ว")
                     else:
-                        st.error("เกิดข้อผิดพลาดในการเชื่อมต่อ GitHub API")
+                        st.error("เกิดข้อผิดพลาดในการเชื่อมต่อ GitHub API โปรดตรวจสอบ Token ใน Secrets")
 
                     st.rerun()
 
