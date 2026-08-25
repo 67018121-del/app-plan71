@@ -13,7 +13,7 @@ REPO_NAME = st.secrets.get("REPO_NAME", "67018121-del/app-plan71")
 
 st.set_page_config(page_title="ระบบแผนคอมพิวเตอร์ 71", layout="wide")
 
-# CSS สำหรับจัดโครงสร้างตารางและจัดกึ่งกลางทุก Element เป๊ะๆ ทั้งแนวนอนและแนวตั้ง
+# CSS ปรับแต่งตำแหน่งและระยะขยับขวา
 st.markdown("""
     <style>
     .main .block-container {
@@ -23,26 +23,27 @@ st.markdown("""
         margin: 0 auto;
     }
 
-    /* CSS บังคับ st.radio ให้อยู่ตรงกลางคอลัมน์แนวนอน */
+    /* ขยับกลุ่ม Radio ยืนยัน / แก้ไข ไปทางขวา */
     div[data-testid="stRadio"] {
         display: flex;
         justify-content: center;
         align-items: center;
         width: 100%;
+        margin-left: 25px !important; /* ดันไปทางขวา 25px (ปรับเพิ่ม-ลดได้ตามต้องการ) */
     }
     div[data-testid="stRadio"] > div {
         justify-content: center !important;
         gap: 15px !important;
     }
 
-    /* บังคับทุก คอลัมน์ Streamlit จัดตรงกลางแนวตั้ง */
+    /* บังคับทุกคอลัมน์ให้อยู่ตรงกลางแนวตั้ง */
     div[data-testid="stHorizontalBlock"] {
         align-items: center !important;
         padding: 6px 0;
         border-bottom: 1px solid #E2E8F0;
     }
 
-    /* ปรับปุ่มบวกลบให้เล็กกระชับ */
+    /* ปรับปุ่มบวกลบ */
     div[data-testid="column"] button {
         padding: 0px 6px !important;
         height: 30px !important;
@@ -165,7 +166,7 @@ if not df_main.empty:
     st.markdown(f"<div style='background-color: #E0F2FE; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px;'><h4 style='margin:0; color: #0369A1;'>💰 สรุปรวมงบประมาณ: <b>{total_budget:,.2f}</b> บาท</h4></div>", unsafe_allow_html=True)
 
     # ==========================================
-    # 3. แสดงตารางข้อมูลแบบปรับ Alignment กลางเป๊ะ
+    # 3. แสดงตารางข้อมูล
     # ==========================================
     st.subheader("📋 รายการข้อมูลแผนคอมพิวเตอร์")
 
@@ -179,7 +180,7 @@ if not df_main.empty:
     h5.markdown("<div class='cell-center'><b>ขอทดแทน</b></div>", unsafe_allow_html=True)
     h6.markdown("<div class='cell-center'><b>รวม</b></div>", unsafe_allow_html=True)
     h7.markdown("<div class='cell-right'><b>จำนวนเงิน (บาท)</b></div>", unsafe_allow_html=True)
-    h8.markdown("<div class='cell-center'><b>ยืนยัน / แก้ไข</b></div>", unsafe_allow_html=True)
+    h8.markdown("<div class='cell-center' style='margin-left: 25px;'><b>ยืนยัน / แก้ไข</b></div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
     # แถวข้อมูลในตาราง
@@ -196,7 +197,7 @@ if not df_main.empty:
         curr_replace = int(row.get('ขอทดแทน', 0))
         max_limit = int(row.get('ขอทดแทน_MAX', curr_replace))
 
-        # Radio เลือกสถานะ (จัดอยู่ตรงกลางแนวนอนและแนวตั้งโดย CSS)
+        # Radio เลือกสถานะ
         action = c8.radio(
             f"action_{idx}",
             ["ยืนยัน", "แก้ไข"],
