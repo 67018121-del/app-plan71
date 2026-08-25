@@ -16,13 +16,13 @@ st.set_page_config(page_title="ระบบแผนคอมพิวเตอ�
 # --- ฟังก์ชันบันทึกกลับไปยัง GitHub อัตโนมัติ ---
 def save_to_github(file_bytes, commit_message):
     if not GITHUB_TOKEN:
-        st.warning("⚠️ ยังไม่ได้ตั้งค่า GITHUB_TOKEN ใน Streamlit Secrets")
+        st.error("⚠️ ไม่พบ GITHUB_TOKEN กรุณาตั้งค่า Secrets ใน Streamlit Cloud")
         return False
 
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{EXCEL_FILE}"
     headers = {
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github+json"
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
     }
     
     # 1. ดึง sha ของไฟล์เดิม
@@ -39,7 +39,10 @@ def save_to_github(file_bytes, commit_message):
         payload["sha"] = sha
     
     put_res = requests.put(url, json=payload, headers=headers)
-    return put_res.status_code in [200, 201]
+    if put_res.status_code not in [200, 201]:
+        st.error(f"GitHub API Error: {put_res.status_code} - {put_res.json().get('message', '')}")
+        return False
+    return True
 
 # --- ฟังก์ชันอ่านข้อมูลจากไฟล์ Excel ---
 def load_data():
@@ -166,18 +169,29 @@ if not df_main.empty:
                     success = save_to_github(excel_bytes, f"Updated by {u_name} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                     
                     if success:
-                        st.success(f"✅ บันทึกการแก้ไขสำเร็จ! ข้อมูลถูกอัปเดตลงไฟล์ Excel ใน GitHub เรียบร้อยแล้ว")
-                    else:
-                        st.error("เกิดข้อผิดพลาดในการเชื่อมต่อ GitHub API โปรดตรวจสอบ Token ใน Secrets")
-
-                    st.rerun()
+                        st.success(f"✅ บันทึกการแก้ไขสำเร็จ! ข้อมูลถูกอัปเดตลง GitHub เรียบร้อยแล้ว")
+                        st.rerun()
 
     # ==========================================
-    # 4. สรุปยอดเงิน & ตารางแสดงผล
+    # 4. สรุปยอดเงิน, ตารางแสดงผล & ปุ่มดาวน์โหลด
     # ==========================================
     total_budget = filtered_df['จำนวนเงิน'].astype(float).sum()
     st.markdown(f"### 💰 สรุปรวมงบประมาณ: **{total_budget:,.2f}** บาท")
 
     st.dataframe(filtered_df, use_container_width=True)
+
+    # ปุ่มสำหรับดาวน์โหลดไฟล์ Excel ล่าสุดจากหน้าเว็บ
+    output_download = io.BytesIO()
+    with pd.ExcelWriter(output_download, engine='openpyxl') as writer:
+        st.session_state.df_main.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
+        st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
+    
+    st.download_button(
+        label="📥 ดาวน์โหลดไฟล์ Excel ล่าสุด (รวมประวัติการแก้ไข)",
+        data=output_download.getvalue(),
+        file_name="รายการแผนคอม 71_อัปเดต.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
 else:
-    st.error("ไม่พบข้อมูลในไฟล์ Excel หรือไฟล์เสียหาย โปรดอัปโหลดไฟล์ 'รายการแผนคอม 71.xlsx' ใหม่อีกครั้ง")
+    st.error("ไม่พบข้อมูลในไฟล์ Excel หรือไฟล์เสียหาย โปรดตรวจสอบไฟล์ 'รายการแผนคอม 71.xlsx'")
