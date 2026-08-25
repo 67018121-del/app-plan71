@@ -25,11 +25,9 @@ def save_to_github(file_bytes, commit_message):
         "Accept": "application/vnd.github.v3+json"
     }
     
-    # 1. ดึง sha ของไฟล์เดิม
     res = requests.get(url, headers=headers)
     sha = res.json().get("sha", "") if res.status_code == 200 else ""
     
-    # 2. ส่งข้อมูลอัปเดตไฟล์กลับไป
     content_b64 = base64.b64encode(file_bytes).decode("utf-8")
     payload = {
         "message": commit_message,
@@ -54,7 +52,7 @@ def load_data():
             except:
                 df_log = pd.DataFrame()
             
-            # เก็บค่าเริ่มต้นเดิมไว้เพื่อกำหนด MAX limit
+            # บันทึกค่า Max ลิมิตตั้งต้น
             if 'ขอทดแทน_MAX' not in df_main.columns:
                 df_main['ขอทดแทน_MAX'] = pd.to_numeric(df_main['ขอทดแทน'], errors='coerce').fillna(0).astype(int)
                 
@@ -72,7 +70,7 @@ if 'df_main' not in st.session_state or 'df_log' not in st.session_state:
 df_main = st.session_state.df_main
 df_log = st.session_state.df_log
 
-st.title("💻 ระบบค้นหา แก้ไข และยืนยันข้อมูลแผนคอมพิวเตอร์ 71")
+st.title("💻 ระบบตรวจสอบ แก้ไข และยืนยันข้อมูลแผนคอมพิวเตอร์ 71")
 
 if not df_main.empty:
     # ==========================================
@@ -90,30 +88,152 @@ if not df_main.empty:
     # ==========================================
     st.subheader("🔍 เลือกหน่วยงาน")
     depts = ["-- ทั้งหมด --"] + sorted([str(x).strip() for x in df_main['หน่วยงาน'].unique() if str(x).strip()])
-    selected_dept = st.selectbox("หน่วยงาน:", depts)
+    selected_dept = st.selectbox("เลือกหน่วยงานที่ต้องการตรวจสอบ:", depts)
 
-    filtered_df = df_main.copy()
+    # กรองข้อมูล
     if selected_dept != "-- ทั้งหมด --":
-        filtered_df = filtered_df[filtered_df['หน่วยงาน'].astype(str).str.strip() == selected_dept]
+        filter_mask = df_main['หน่วยงาน'].astype(str).str.strip() == selected_dept
+    else:
+        filter_mask = pd.Series([True] * len(df_main))
+
+    filtered_indices = df_main[filter_mask].index.tolist()
+
+    # Calculate Total Budget
+    total_budget = df_main.loc[filtered_indices, 'จำนวนเงิน'].astype(float).sum()
+    st.markdown(f"### 💰 สรุปรวมงบประมาณหน่วยงานที่เลือก: **{total_budget:,.2f}** บาท")
+
+    st.markdown("---")
+    st.subheader("📋 รายการข้อมูลแผนคอมพิวเตอร์")
+
+    # Header ของรายการ
+    h_c1, h_c2, h_c3, h_c4, h_c5, h_c6, h_c7 = st.columns([1, 4, 2, 2, 2, 3, 3])
+    h_c1.markdown("**ลำดับ**")
+    h_c2.markdown("**รายการ/ประเภท**")
+    h_c3.markdown("**ขอใหม่**")
+    h_c4.markdown("**ขอทดแทน**")
+    h_c5.markdown("**รวม**")
+    h_c6.markdown("**งบประมาณ (บาท)**")
+    h_c7.markdown("**สถานะ / การดำเนินการ**")
 
     # ==========================================
-    # 3. จัดการ Layout สองฝั่ง (ซ้าย: ตาราง | ขวา: ส่วนจัดการแก้ไข)
+    # 3. แสดงรายการทีละแถวพร้อมปุ่มดำเนินการข้างตาราง
     # ==========================================
-    col_left, col_right = st.columns([6, 4])
+    has_changes = False
 
-    with col_left:
-        st.subheader("📊 ตารางข้อมูล")
-        total_budget = filtered_df['จำนวนเงิน'].astype(float).sum()
-        st.markdown(f"💰 สรุปรวมงบประมาณ: **{total_budget:,.2f}** บาท")
+    for idx in filtered_indices:
+        row = st.session_state.df_main.loc[idx]
         
-        # แสดงเฉพาะคอลัมน์สำคัญในตาราง
-        display_cols = [c for c in ['ลำดับ', 'รายการ/ประเภท', 'หน่วยงาน', 'ขอใหม่', 'ขอทดแทน', 'รวม', 'ราคาต่อหน่วย', 'จำนวนเงิน'] if c in filtered_df.columns]
-        st.dataframe(filtered_df[display_cols], use_container_width=True, height=450)
+        c1, c2, c3, c4, c5, c6, c7 = st.columns([1, 4, 2, 2, 2, 3, 3])
+        
+        c1.write(f"{row.get('ลำดับ', idx + 1)}")
+        c2.write(f"{row.get('รายการ/ประเภท', '')}")
+        c3.write(f"{row.get('ขอใหม่', 0)}")
+        
+        # แสดงขอทดแทนปัจจุบัน
+        curr_replace = int(row.get('ขอทดแทน', 0))
+        max_limit = int(row.get('ขอทดแทน_MAX', curr_replace))
+        c4.write(f"**{curr_replace}** (Max: {max_limit})")
+        
+        c5.write(f"{row.get('รวม', 0)}")
+        c6.write(f"{float(row.get('จำนวนเงิน', 0)):,.2f}")
 
-        # ปุ่มดาวน์โหลดไฟล์ Excel
+        # ฝั่งขวา: สวิตช์เลือกว่า ยืนยัน หรือ แก้ไข
+        action = c7.radio(
+            f"action_{idx}",
+            ["ยืนยันข้อมูลเดิม", "แก้ไข"],
+            key=f"radio_{idx}",
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+
+        # หากเลือก "แก้ไข" ให้แสดงปุ่ม + / - ข้างตาราง
+        if action == "แก้ไข":
+            btn_col1, btn_col2, btn_col3 = c7.columns([1, 2, 1])
+            
+            # ปุ่มลบ (-)
+            if btn_col1.button("➖", key=f"dec_{idx}", disabled=(curr_replace <= 0)):
+                new_replace = curr_replace - 1
+                new_total = int(row.get('ขอใหม่', 0)) + new_replace
+                unit_price = float(row.get('ราคาต่อหน่วย', 0))
+                
+                st.session_state.df_main.loc[idx, 'ขอทดแทน'] = new_replace
+                st.session_state.df_main.loc[idx, 'รวม'] = new_total
+                st.session_state.df_main.loc[idx, 'จำนวนเงิน'] = new_total * unit_price
+                st.rerun()
+
+            btn_col2.markdown(f"<h5 style='text-align: center; margin: 0;'>{curr_replace}</h5>", unsafe_allow_html=True)
+
+            # ปุ่มเพิ่ม (+)
+            if btn_col3.button("➕", key=f"inc_{idx}", disabled=(curr_replace >= max_limit)):
+                new_replace = curr_replace + 1
+                new_total = int(row.get('ขอใหม่', 0)) + new_replace
+                unit_price = float(row.get('ราคาต่อหน่วย', 0))
+                
+                st.session_state.df_main.loc[idx, 'ขอทดแทน'] = new_replace
+                st.session_state.df_main.loc[idx, 'รวม'] = new_total
+                st.session_state.df_main.loc[idx, 'จำนวนเงิน'] = new_total * unit_price
+                st.rerun()
+
+        st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
+
+    # ==========================================
+    # 4. ปุ่มบันทึกข้อมูลและดาวน์โหลด
+    # ==========================================
+    st.markdown("---")
+    col_save, col_dl = st.columns([1, 1])
+
+    with col_save:
+        if st.button("💾 บันทึกการทำรายการลง GitHub", type="primary", use_container_width=True):
+            if not u_name or not u_id or not u_pos or not u_dept:
+                st.warning("⚠️ กรุณากรอกข้อมูลผู้ทำรายการให้ครบถ้วนด้านบนก่อนกดบันทึก")
+            else:
+                # สร้าง Log สรุปการรายการ
+                new_logs = []
+                for idx in filtered_indices:
+                    row = st.session_state.df_main.loc[idx]
+                    action_val = st.session_state.get(f"radio_{idx}", "ยืนยันข้อมูลเดิม")
+                    
+                    orig_replace = int(row.get('ขอทดแทน_MAX', 0))
+                    curr_rep = int(row.get('ขอทดแทน', 0))
+                    unit_p = float(row.get('ราคาต่อหน่วย', 0))
+                    
+                    log_entry = {
+                        'เวลาที่แก้ไข': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'ลำดับ': row.get('ลำดับ', idx + 1),
+                        'หน่วยงาน': row.get('หน่วยงาน', ''),
+                        'รายการ/ประเภท': row.get('รายการ/ประเภท', ''),
+                        'ขอทดแทน (เดิม)': orig_replace,
+                        'ขอทดแทน (ใหม่)': curr_rep,
+                        'ผลต่างจำนวน': curr_rep - orig_replace,
+                        'ราคาต่อหน่วย': unit_p,
+                        'จำนวนเงินใหม่': float(row.get('จำนวนเงิน', 0)),
+                        'ชื่อ-นามสกุล ผู้แก้ไข': u_name,
+                        'รหัสพนักงาน': u_id,
+                        'ตำแหน่ง': u_pos,
+                        'หน่วยงานผู้แก้ไข': u_dept,
+                        'หมายเหตุ': action_val
+                    }
+                    new_logs.append(log_entry)
+
+                new_log_df = pd.DataFrame(new_logs)
+                st.session_state.df_log = pd.concat([st.session_state.df_log, new_log_df], ignore_index=True)
+
+                # แปลงไฟล์เซฟลง GitHub
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df_save = st.session_state.df_main.drop(columns=['ขอทดแทน_MAX'], errors='ignore')
+                    df_save.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
+                    st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
+                excel_bytes = output.getvalue()
+
+                success = save_to_github(excel_bytes, f"Updated/Confirmed by {u_name} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                if success:
+                    st.success("✅ บันทึกข้อมูลลง GitHub เรียบร้อยแล้ว!")
+                    st.rerun()
+
+    with col_dl:
         output_download = io.BytesIO()
         with pd.ExcelWriter(output_download, engine='openpyxl') as writer:
-            # ซ่อนคอลัมน์ ขอทดแทน_MAX ก่อนเซฟ
             df_save = st.session_state.df_main.drop(columns=['ขอทดแทน_MAX'], errors='ignore')
             df_save.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
             st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
@@ -122,145 +242,9 @@ if not df_main.empty:
             label="📥 ดาวน์โหลดไฟล์ Excel ล่าสุด",
             data=output_download.getvalue(),
             file_name="รายการแผนคอม 71_อัปเดต.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
         )
-
-    with col_right:
-        st.subheader("📋 ดำเนินการรายการ")
-        if not filtered_df.empty:
-            options = {f"ลำดับ {row.get('ลำดับ', idx + 1)}: {row.get('รายการ/ประเภท', '')}": idx for idx, row in filtered_df.iterrows()}
-            selected_option = st.selectbox("เลือกรายการที่ต้องการทำรายการ:", list(options.keys()))
-            
-            selected_idx = options[selected_option]
-            current_row = df_main.loc[selected_idx]
-            
-            # ดึงค่า Max limit ของรายการที่เลือก
-            max_limit = int(current_row.get('ขอทดแทน_MAX', current_row.get('ขอทดแทน', 0)))
-            
-            action_type = st.radio(
-                "ความต้องการของหน่วยงาน:",
-                ["✅ ยืนยันข้อมูลตามเดิม (ไม่แก้ไข)", "✏️ ต้องการแก้ไขจำนวนขอทดแทน"],
-                horizontal=False
-            )
-
-            # ----------------------------------------------------
-            # กรณีที่ 1: ยืนยันข้อมูลตามเดิม
-            # ----------------------------------------------------
-            if action_type == "✅ ยืนยันข้อมูลตามเดิม (ไม่แก้ไข)":
-                st.info(f"📌 **ขอใหม่:** {current_row.get('ขอใหม่', 0)} | **ขอทดแทน:** {current_row.get('ขอทดแทน', 0)} | **รวม:** {current_row.get('รวม', 0)} เครื่อง")
-                
-                if st.button("✅ ยืนยันข้อมูลถูกต้อง", type="primary", use_container_width=True):
-                    if not u_name or not u_id or not u_pos or not u_dept:
-                        st.warning("⚠️ กรุณากรอกข้อมูลผู้ทำรายการให้ครบถ้วนก่อนกดบันทึก")
-                    else:
-                        curr_replace = int(current_row.get('ขอทดแทน', 0) or 0)
-                        curr_amount = float(current_row.get('จำนวนเงิน', 0) or 0)
-                        unit_price = float(current_row.get('ราคาต่อหน่วย', 0) or 0)
-
-                        log_entry = {
-                            'เวลาที่แก้ไข': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                            'ลำดับ': current_row.get('ลำดับ', selected_idx + 1),
-                            'หน่วยงาน': current_row.get('หน่วยงาน', ''),
-                            'รายการ/ประเภท': current_row.get('รายการ/ประเภท', ''),
-                            'ขอทดแทน (เดิม)': curr_replace,
-                            'ขอทดแทน (ใหม่)': curr_replace,
-                            'ผลต่างจำนวน': 0,
-                            'ราคาต่อหน่วย': unit_price,
-                            'จำนวนเงินเดิม': curr_amount,
-                            'จำนวนเงินใหม่': curr_amount,
-                            'ผลต่างงบประมาณ': 0,
-                            'ชื่อ-นามสกุล ผู้แก้ไข': u_name,
-                            'รหัสพนักงาน': u_id,
-                            'ตำแหน่ง': u_pos,
-                            'หน่วยงานผู้แก้ไข': u_dept,
-                            'หมายเหตุ': 'ยืนยันข้อมูลตามเดิม'
-                        }
-
-                        new_log_df = pd.DataFrame([log_entry])
-                        st.session_state.df_log = pd.concat([st.session_state.df_log, new_log_df], ignore_index=True)
-
-                        output = io.BytesIO()
-                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                            df_save = st.session_state.df_main.drop(columns=['ขอทดแทน_MAX'], errors='ignore')
-                            df_save.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
-                            st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
-                        excel_bytes = output.getvalue()
-
-                        success = save_to_github(excel_bytes, f"Confirmed by {u_name} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                        
-                        if success:
-                            st.success(f"✅ บันทึกการ 'ยืนยันข้อมูลตามเดิม' เรียบร้อยแล้ว")
-                            st.rerun()
-
-            # ----------------------------------------------------
-            # กรณีที่ 2: ต้องการแก้ไขจำนวน (ลดได้ถึง 0, เพิ่มได้ไม่เกิน MAX)
-            # ----------------------------------------------------
-            else:
-                st.caption(f"ℹ️ สามารถปรับลดจำนวนได้ถึง 0 และเพิ่มได้สูงสุดไม่เกิน **{max_limit}** เครื่อง (ตามแผนเดิม)")
-                
-                val_replace_new = st.number_input(
-                    "ขอทดแทน (ระบุจำนวนใหม่):", 
-                    value=int(current_row.get('ขอทดแทน', 0)), 
-                    step=1, 
-                    min_value=0, 
-                    max_value=max_limit
-                )
-
-                if st.button("💾 บันทึกการแก้ไขข้อมูล", type="primary", use_container_width=True):
-                    if not u_name or not u_id or not u_pos or not u_dept:
-                        st.warning("⚠️ กรุณากรอกข้อมูลผู้ทำรายการให้ครบถ้วนก่อนกดบันทึก")
-                    else:
-                        old_replace = int(current_row.get('ขอทดแทน', 0) or 0)
-                        old_amount = float(current_row.get('จำนวนเงิน', 0) or 0)
-                        unit_price = float(current_row.get('ราคาต่อหน่วย', 0) or 0)
-                        val_new = int(current_row.get('ขอใหม่', 0) or 0)
-
-                        if old_replace == val_replace_new:
-                            st.info("ℹ️ จำนวนขอทดแทนไม่ได้เปลี่ยนแปลง")
-                        else:
-                            val_total_new = val_new + val_replace_new
-                            new_amount = val_total_new * unit_price
-
-                            st.session_state.df_main.loc[selected_idx, 'ขอทดแทน'] = val_replace_new
-                            st.session_state.df_main.loc[selected_idx, 'รวม'] = val_total_new
-                            st.session_state.df_main.loc[selected_idx, 'จำนวนเงิน'] = new_amount
-
-                            log_entry = {
-                                'เวลาที่แก้ไข': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                'ลำดับ': current_row.get('ลำดับ', selected_idx + 1),
-                                'หน่วยงาน': current_row.get('หน่วยงาน', ''),
-                                'รายการ/ประเภท': current_row.get('รายการ/ประเภท', ''),
-                                'ขอทดแทน (เดิม)': old_replace,
-                                'ขอทดแทน (ใหม่)': val_replace_new,
-                                'ผลต่างจำนวน': val_replace_new - old_replace,
-                                'ราคาต่อหน่วย': unit_price,
-                                'จำนวนเงินเดิม': old_amount,
-                                'จำนวนเงินใหม่': new_amount,
-                                'ผลต่างงบประมาณ': new_amount - old_amount,
-                                'ชื่อ-นามสกุล ผู้แก้ไข': u_name,
-                                'รหัสพนักงาน': u_id,
-                                'ตำแหน่ง': u_pos,
-                                'หน่วยงานผู้แก้ไข': u_dept,
-                                'หมายเหตุ': 'มีการแก้ไขจำนวน'
-                            }
-
-                            new_log_df = pd.DataFrame([log_entry])
-                            st.session_state.df_log = pd.concat([st.session_state.df_log, new_log_df], ignore_index=True)
-
-                            output = io.BytesIO()
-                            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                                df_save = st.session_state.df_main.drop(columns=['ขอทดแทน_MAX'], errors='ignore')
-                                df_save.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
-                                st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
-                            excel_bytes = output.getvalue()
-
-                            success = save_to_github(excel_bytes, f"Updated by {u_name} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                            
-                            if success:
-                                st.success(f"✅ บันทึกการแก้ไขข้อมูลเรียบร้อยแล้ว")
-                                st.rerun()
-        else:
-            st.info("ไม่พบรายการข้อมูลในหน่วยงานที่เลือก")
 
 else:
     st.error("ไม่พบข้อมูลในไฟล์ Excel หรือไฟล์เสียหาย โปรดตรวจสอบไฟล์ 'รายการแผนคอม 71.xlsx'")
