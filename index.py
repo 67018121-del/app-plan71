@@ -2,10 +2,43 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
+import io
+import requests
+import base64
 
 EXCEL_FILE = 'รายการแผนคอม 71.xlsx'
 
+# ดึงค่าจาก Streamlit Secrets หรือ Environment Variable
+GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", os.environ.get("GITHUB_TOKEN", ""))
+REPO_NAME = st.secrets.get("REPO_NAME", "67018121-del/app-plan71")  # เปลี่ยนตาม Username/Repo จริงของคุณ
+
 st.set_page_config(page_title="ระบบแผนคอมพิวเตอร์ 71", layout="wide")
+
+# --- ฟังก์ชันบันทึกกลับไปยัง GitHub อัตโนมัติ ---
+def save_to_github(file_bytes, commit_message):
+    if not GITHUB_TOKEN:
+        st.warning("⚠️ ยังไม่ได้ตั้งค่า GITHUB_TOKEN ใน Streamlit Secrets (ข้อมูลจะบันทึกชั่วคราวในเครื่อง Server)")
+        with open(EXCEL_FILE, "wb") as f:
+            f.write(file_bytes)
+        return True
+
+    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{EXCEL_FILE}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    
+    # 1. ดึง sha ของไฟล์เดิม
+    res = requests.get(url, headers=headers)
+    sha = res.json().get("sha", "") if res.status_code == 200 else ""
+    
+    # 2. ส่งข้อมูลอัปเดตไฟล์กลับไป
+    content_b64 = base64.b64encode(file_bytes).decode("utf-8")
+    payload = {
+        "message": commit_message,
+        "content": content_b64,
+        "sha": sha
+    }
+    
+    put_res = requests.put(url, json=payload, headers=headers)
+    return put_res.status_code in [200, 201]
 
 # --- ฟังก์ชันอ่านข้อมูลจากไฟล์ Excel ---
 def load_data():
@@ -66,7 +99,7 @@ if not df_main.empty:
         filtered_df = filtered_df[filtered_df.astype(str).apply(lambda x: x.str.contains(search_txt, case=False)).any(axis=1)]
 
     # ==========================================
-    # 3. ส่วนแก้ไขข้อมูล & บันทึก (แก้ไข Sheet หลัก + สะสมใน Sheet ประวัติ)
+    # 3. ส่วนแก้ไขข้อมูล & บันทึก
     # ==========================================
     st.subheader("✏️ แก้ไขจำนวนเครื่องขอทดแทน")
     
@@ -94,18 +127,14 @@ if not df_main.empty:
                     val_total_new = val_new + val_replace_new
                     new_amount = val_total_new * unit_price
 
-                    # 1. อัปเดตข้อมูล Sheet หลักใน Session
+                    # 1. อัปเดตข้อมูล Sheet หลัก
                     st.session_state.df_main.loc[selected_idx, 'ขอทดแทน'] = val_replace_new
                     st.session_state.df_main.loc[selected_idx, 'รวม'] = val_total_new
                     st.session_state.df_main.loc[selected_idx, 'จำนวนเงิน'] = new_amount
 
-                    # 2. สร้าง Log บันทึกย้อนหลัง
+                    # 2. สร้าง Log บันทึกย้อนหลัง (เรียงคอลัมน์ให้ตรงตารางเดิม)
                     log_entry = {
                         'เวลาที่แก้ไข': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        'ชื่อ-นามสกุล ผู้แก้ไข': u_name,
-                        'รหัสพนักงาน': u_id,
-                        'ตำแหน่ง': u_pos,
-                        'หน่วยงานผู้แก้ไข': u_dept,
                         'ลำดับ': current_row.get('ลำดับ', selected_idx + 1),
                         'หน่วยงาน': current_row.get('หน่วยงาน', ''),
                         'รายการ/ประเภท': current_row.get('รายการ/ประเภท', ''),
@@ -115,21 +144,30 @@ if not df_main.empty:
                         'ราคาต่อหน่วย': unit_price,
                         'จำนวนเงินเดิม': old_amount,
                         'จำนวนเงินใหม่': new_amount,
-                        'ผลต่างงบประมาณ': new_amount - old_amount
+                        'ผลต่างงบประมาณ': new_amount - old_amount,
+                        'ชื่อ-นามสกุล ผู้แก้ไข': u_name,
+                        'รหัสพนักงาน': u_id,
+                        'ตำแหน่ง': u_pos,
+                        'หน่วยงานผู้แก้ไข': u_dept
                     }
 
-                    # อัปเดตประวัติ Log ใน Session
                     new_log_df = pd.DataFrame([log_entry])
                     st.session_state.df_log = pd.concat([st.session_state.df_log, new_log_df], ignore_index=True)
 
-                    # 3. บันทึกเขียนทับลงไฟล์ Excel (ทั้ง Sheet หลักที่แก้ไขแล้ว และ Sheet ประวัติการแก้ไข)
-                    try:
-                        with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
-                            st.session_state.df_main.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
-                            st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
-                        st.success(f"✅ บันทึกการแก้ไขลง Sheet หลัก และเพิ่มข้อมูลลง Sheet 'ประวัติการแก้ไข' เรียบร้อยแล้วโดย {u_name}!")
-                    except Exception as e:
-                        st.error(f"เกิดข้อผิดพลาดในการเซฟไฟล์: {e}")
+                    # 3. แปลงเป็นไฟล์ Excel ใน Memory
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        st.session_state.df_main.to_excel(writer, sheet_name='ข้อมูลแผนคอมพิวเตอร์', index=False)
+                        st.session_state.df_log.to_excel(writer, sheet_name='ประวัติการแก้ไข', index=False)
+                    excel_bytes = output.getvalue()
+
+                    # 4. บันทึกตรงเข้า GitHub
+                    success = save_to_github(excel_bytes, f"Updated by {u_name} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    
+                    if success:
+                        st.success(f"✅ บันทึกการแก้ไขและส่งข้อมูลเข้า GitHub เรียบร้อยแล้วโดย {u_name}!")
+                    else:
+                        st.error("เกิดข้อผิดพลาดในการเชื่อมต่อ GitHub API")
 
                     st.rerun()
 
